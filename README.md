@@ -4,6 +4,9 @@ A small FastAPI service that validates GitHub Actions workflow YAML files
 against a set of common-issue rules and returns a structured JSON report of
 violations with rule id, severity, and description.
 
+## Authors Note
+This was a live-build during a Yahoo technical interview. I used Claude as a pair-programming assistant to scaffold the validator service, then iterated on the rule set, the auto-fixer behavior, and the YAML round-trip semantics through back-and-forth review. Everything that's here, I can walk through - it's the version I ended with after pushing back on the parts I disagreed with.
+
 ## Web UI
 
 Open <http://127.0.0.1:8000/> after starting the service to get a drag-and-drop
