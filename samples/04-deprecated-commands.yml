@@ -1,0 +1,17 @@
+name: Legacy Workflow
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - id: vars
+        run: |
+          echo "::set-output name=version::1.2.3"
+          echo "::save-state name=cache-hit::true"
+      - run: echo "version=${{ steps.vars.outputs.version }}"

@@ -1,0 +1,7 @@
+name: Broken
+
+jobs:
+  build:
+    steps:
+      - name: does nothing
+      - run: echo "orphan step"

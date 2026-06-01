@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GitHub Actions Workflow Validator</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-2: #1f2630;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --error: #f85149;
+      --warning: #d29922;
+      --info: #58a6ff;
+      --ok: #3fb950;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+    h1 { font-size: 24px; margin: 0 0 4px; }
+    .subtitle { color: var(--muted); margin: 0 0 24px; }
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 48px 24px;
+      text-align: center;
+      background: var(--panel);
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .dropzone.hover { border-color: var(--accent); background: var(--panel-2); }
+    .dropzone p { margin: 8px 0; color: var(--muted); }
+    .dropzone strong { color: var(--text); }
+    input[type=file] { display: none; }
+    .controls { display: flex; gap: 8px; margin: 16px 0; }
+    button {
+      background: var(--accent);
+      color: #0d1117;
+      border: 0;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-left: auto; }
+    .toggle input { accent-color: var(--accent); }
+    .fixes-header { padding: 10px 16px; background: rgba(63,185,80,.08); color: var(--ok); border-top: 1px solid var(--border); font-size: 13px; font-weight: 600; }
+    .fixes { list-style: none; padding: 0; margin: 0; }
+    .fixes li { padding: 8px 16px; border-top: 1px solid var(--border); font-size: 13px; display: grid; grid-template-columns: 90px 1fr; gap: 12px; }
+    .download { margin: 0 16px 12px; }
+    .download a { color: var(--accent); font-size: 13px; text-decoration: none; }
+    .download a:hover { text-decoration: underline; }
+    .file-list { list-style: none; padding: 0; margin: 16px 0; }
+    .file-list li {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 6px;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 13px;
+    }
+    .file-list .size { color: var(--muted); font-size: 12px; }
+    .results { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; }
+    .file-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .file-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 16px;
+      background: var(--panel-2);
+      border-bottom: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .badge.valid { background: rgba(63,185,80,.15); color: var(--ok); }
+    .badge.invalid { background: rgba(248,81,73,.15); color: var(--error); }
+    .badge.error { background: rgba(248,81,73,.15); color: var(--error); }
+    .badge.warning { background: rgba(210,153,34,.15); color: var(--warning); }
+    .badge.info { background: rgba(88,166,255,.15); color: var(--info); }
+    .violations { list-style: none; margin: 0; padding: 0; }
+    .violations li {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .violations li:first-child { border-top: 0; }
+    .rule { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; color: var(--muted); }
+    .desc { font-size: 14px; }
+    .path { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .empty { padding: 16px; color: var(--muted); font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>GitHub Actions Workflow Validator</h1>
+    <p class="subtitle">Drop one or more <code>.yml</code> / <code>.yaml</code> workflow files. Files are sorted alphabetically, then each is validated.</p>
+
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="file-input" multiple accept=".yml,.yaml" />
+      <p><strong>Drop workflow files here</strong> or click to browse</p>
+      <p>Multiple files supported</p>
+    </label>
+
+    <ul class="file-list" id="file-list"></ul>
+
+    <div class="controls">
+      <button id="validate-btn" disabled>Validate all</button>
+      <button id="clear-btn" class="secondary" disabled>Clear</button>
+      <label class="toggle">
+        <input type="checkbox" id="fix-toggle" />
+        Auto-fix fixable issues
+      </label>
+    </div>
+
+    <div class="results" id="results"></div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const fileList = document.getElementById('file-list');
+    const validateBtn = document.getElementById('validate-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const results = document.getElementById('results');
+
+    let files = [];
+
+    function render() {
+      fileList.innerHTML = '';
+      files.forEach(f => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span>${escapeHtml(f.name)}</span><span class="size">${f.size} bytes</span>`;
+        fileList.appendChild(li);
+      });
+      validateBtn.disabled = files.length === 0;
+      clearBtn.disabled = files.length === 0;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function addFiles(fileListLike) {
+      const incoming = Array.from(fileListLike).filter(f => /\.(ya?ml)$/i.test(f.name));
+      files = [...files, ...incoming];
+      // sort alphabetically by name (case-insensitive), dedupe by name+size
+      const seen = new Set();
+      files = files
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+        .filter(f => {
+          const k = f.name + ':' + f.size;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+      render();
+    }
+
+    ['dragenter', 'dragover'].forEach(ev =>
+      dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('hover'); }));
+    ['dragleave', 'drop'].forEach(ev =>
+      dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('hover'); }));
+    dropzone.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+    fileInput.addEventListener('change', e => addFiles(e.target.files));
+
+    clearBtn.addEventListener('click', () => {
+      files = [];
+      results.innerHTML = '';
+      fileInput.value = '';
+      render();
+    });
+
+    validateBtn.addEventListener('click', async () => {
+      validateBtn.disabled = true;
+      results.innerHTML = '';
+      const useFix = document.getElementById('fix-toggle').checked;
+      const endpoint = useFix ? '/fix' : '/validate';
+      for (const file of files) {
+        const content = await file.text();
+        const card = document.createElement('div');
+        card.className = 'file-card';
+        card.innerHTML = `<div class="file-header"><span>${escapeHtml(file.name)}</span><span>${useFix ? 'fixing…' : 'validating…'}</span></div>`;
+        results.appendChild(card);
+        try {
+          const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ content })
+          });
+          const body = await resp.json();
+          if (useFix) {
+            renderFixCard(card, file.name, body);
+          } else {
+            renderCard(card, file.name, body);
+          }
+        } catch (err) {
+          card.innerHTML = `<div class="file-header"><span>${escapeHtml(file.name)}</span><span class="badge invalid">request failed</span></div><div class="empty">${escapeHtml(err.message)}</div>`;
+        }
+      }
+      validateBtn.disabled = false;
+    });
+
+    function renderCard(card, name, body) {
+      const counts = { error: 0, warning: 0, info: 0 };
+      body.violations.forEach(v => { counts[v.severity] = (counts[v.severity] || 0) + 1; });
+      const statusBadge = body.valid
+        ? '<span class="badge valid">valid</span>'
+        : '<span class="badge invalid">invalid</span>';
+      const countBadges = Object.entries(counts)
+        .filter(([, n]) => n > 0)
+        .map(([sev, n]) => `<span class="badge ${sev}">${n} ${sev}</span>`)
+        .join(' ');
+
+      let inner = `<div class="file-header"><span>${escapeHtml(name)}</span><span>${statusBadge} ${countBadges}</span></div>`;
+      if (body.violations.length === 0) {
+        inner += `<div class="empty">No issues found.</div>`;
+      } else {
+        // sort violations: error → warning → info
+        const order = { error: 0, warning: 1, info: 2 };
+        const sorted = [...body.violations].sort((a, b) => order[a.severity] - order[b.severity]);
+        inner += '<ul class="violations">';
+        for (const v of sorted) {
+          inner += `
+            <li>
+              <span class="badge ${v.severity}">${v.severity}</span>
+              <div>
+                <div class="desc">${escapeHtml(v.description)}</div>
+                <div class="rule">${escapeHtml(v.rule)}${v.path ? ' · ' + escapeHtml(v.path) : ''}</div>
+              </div>
+            </li>`;
+        }
+        inner += '</ul>';
+      }
+      card.innerHTML = inner;
+    }
+
+    function renderFixCard(card, name, body) {
+      const remaining = body.remaining_violations || [];
+      const applied = body.applied_fixes || [];
+      const statusBadge = body.valid_after_fix
+        ? '<span class="badge valid">valid after fix</span>'
+        : '<span class="badge invalid">issues remain</span>';
+      const appliedBadge = applied.length
+        ? `<span class="badge valid">${applied.length} fixed</span>`
+        : '<span class="badge info">0 fixed</span>';
+
+      let inner = `<div class="file-header"><span>${escapeHtml(name)}</span><span>${statusBadge} ${appliedBadge}</span></div>`;
+
+      if (applied.length) {
+        inner += `<div class="fixes-header">Applied fixes</div><ul class="fixes">`;
+        for (const f of applied) {
+          inner += `<li><span class="badge valid">fixed</span><div><div class="desc">${escapeHtml(f.description)}</div><div class="rule">${escapeHtml(f.rule)}</div></div></li>`;
+        }
+        inner += `</ul>`;
+      }
+
+      if (remaining.length) {
+        const order = { error: 0, warning: 1, info: 2 };
+        const sorted = [...remaining].sort((a, b) => order[a.severity] - order[b.severity]);
+        inner += `<div class="fixes-header" style="background: rgba(248,81,73,.08); color: var(--error);">Remaining violations</div><ul class="violations">`;
+        for (const v of sorted) {
+          inner += `<li><span class="badge ${v.severity}">${v.severity}</span><div><div class="desc">${escapeHtml(v.description)}</div><div class="rule">${escapeHtml(v.rule)}${v.path ? ' · ' + escapeHtml(v.path) : ''}</div></div></li>`;
+        }
+        inner += `</ul>`;
+      } else if (!applied.length) {
+        inner += `<div class="empty">No issues found — nothing to fix.</div>`;
+      }
+
+      if (applied.length) {
+        const blob = new Blob([body.fixed_content], { type: 'text/yaml' });
+        const url = URL.createObjectURL(blob);
+        inner += `<div class="download"><a href="${url}" download="fixed-${escapeHtml(name)}">⬇ Download fixed YAML</a></div>`;
+      }
+
+      card.innerHTML = inner;
+    }
+  </script>
+</body>
+</html>

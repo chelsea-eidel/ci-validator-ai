@@ -1,0 +1,19 @@
+on: push
+
+bogus: true
+
+jobs:
+  "1-invalid-id":
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        run: echo "both uses and run"
+      - run: echo "::set-output name=sha::$(git rev-parse HEAD)"
+      - run: 'curl -H "X-Token: ${{ secrets.API_KEY }}" https://example.com'
+      - name: nothing here
+  no-runs-on:
+    steps:
+      - run: echo "missing runs-on"
+  empty-steps:
+    runs-on: ubuntu-latest
+    steps: []
