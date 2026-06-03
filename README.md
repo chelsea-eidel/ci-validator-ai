@@ -4,16 +4,16 @@ A small FastAPI service that validates GitHub Actions workflow YAML files
 against a set of common-issue rules and returns a structured JSON report of
 violations with rule id, severity, and description.
 
-## Authors Note
+## Status
+
+Complete as scoped: all three endpoints (`/health`, `/validate`, `/fix`), the
+24 rules below, the auto-fixer, and the drag-and-drop web UI are implemented
+and covered by the test suite. See [Known limitations](#known-limitations) for
+what's intentionally out of scope and [Possible next steps](#possible-next-steps)
+for follow-ups.
+
+## Author's Note
 This was a live-build during a Yahoo technical interview. I used Claude as a pair-programming assistant to scaffold the validator service, then iterated on the rule set, the auto-fixer behavior, and the YAML round-trip semantics through back-and-forth review. Everything that's here, I can walk through - it's the version I ended with after pushing back on the parts I disagreed with.
-
-## Web UI
-
-Open <http://127.0.0.1:8000/> after starting the service to get a drag-and-drop
-page where you can drop one or more `.yml` / `.yaml` workflow files. Files are
-sorted alphabetically by name, then each is validated in sequence via the
-`/validate` endpoint and the violations are rendered grouped by file and
-sorted by severity (error → warning → info).
 
 ## Endpoints
 
@@ -45,9 +45,8 @@ body is identical to `/validate`. Response:
 Auto-fixable rules: `missing-workflow-name`, `missing-permissions`,
 `missing-runs-on`, `deprecated-set-output`, `deprecated-save-state`.
 Everything else is left to the author to fix — those violations appear in
-`remaining_violations`. Structural fixes are applied by round-tripping
-through PyYAML, so the rewritten file loses comments and original
-formatting.
+`remaining_violations`. Note that fixes do not preserve comments or
+formatting (see [Known limitations](#known-limitations)).
 
 ### `POST /validate`
 
@@ -111,6 +110,27 @@ Response:
 | `deprecated-set-output` | warning | Uses `::set-output` workflow command |
 | `deprecated-save-state` | warning | Uses `::save-state` workflow command |
 
+## Known limitations
+
+- **Structural lint, not full schema validation.** The rules catch common,
+  high-signal mistakes; they do not validate every field against the GitHub
+  Actions schema. Event names and values under `on:`, expression syntax, and
+  most action-input shapes are not deeply checked, so a workflow that passes
+  here can still be rejected by GitHub.
+- **`/fix` does not preserve comments or formatting.** Structural fixes are
+  applied by round-tripping through PyYAML, so the rewritten file loses
+  comments, blank lines, and original key ordering. Treat the output as a
+  starting point to review, not a drop-in replacement.
+- **Pattern-based security checks.** `action-not-pinned-to-sha` and
+  `secret-in-run-command` are heuristics and can produce false positives or
+  miss obfuscated cases.
+
+## Possible next steps
+
+- Schema-aware validation of `on:` events and trigger filters.
+- Comment-preserving fixes (e.g. via `ruamel.yaml`).
+- More auto-fixable rules (e.g. SHA-pinning by resolving tags to commits).
+
 ## Setup
 
 ```bash
@@ -127,6 +147,14 @@ uvicorn main:app --reload
 
 Interactive docs: <http://127.0.0.1:8000/docs>
 
+## Web UI
+
+With the service running, open <http://127.0.0.1:8000/> for a drag-and-drop
+page where you can drop one or more `.yml` / `.yaml` workflow files. Files are
+sorted alphabetically by name, then each is validated in sequence via the
+`/validate` endpoint and the violations are rendered grouped by file and
+sorted by severity (error → warning → info).
+
 ## Try it
 
 ```bash
@@ -134,8 +162,13 @@ curl -s http://127.0.0.1:8000/health
 
 curl -s -X POST http://127.0.0.1:8000/validate \
   -H "content-type: application/json" \
-  -d "$(jq -Rs '{content: .}' < .github/workflows/ci.yml)"
+  -d "$(jq -Rs '{content: .}' < samples/08-kitchen-sink.yml)"
 ```
+
+The [`samples/`](samples/) directory holds example workflows, one per failure
+category (`01-clean.yml` through `08-kitchen-sink.yml`), so you can see each
+rule fire. `08-kitchen-sink.yml` trips many rules at once; `01-clean.yml`
+passes cleanly.
 
 ## Run the tests
 
